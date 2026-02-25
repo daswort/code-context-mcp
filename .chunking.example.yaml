@@ -1,0 +1,59 @@
+# .chunking.yaml — Configuración por proyecto
+#
+# Copie este archivo como `.chunking.yaml` en la raíz de cualquier repositorio
+# para personalizar el comportamiento de chunking-get y chunking-ingest.
+#
+# Todos los valores son opcionales. Los que no se definan usan los defaults
+# listados abajo. Las listas EXTIENDEN los defaults, no los reemplazan.
+
+# ─── Directorios excluidos ───────────────────────────────────────────────────
+# Defaults ya incluidos (no hace falta repetirlos):
+#   .git, __pycache__, node_modules, dist, build,
+#   .venv, .idea, .vscode, .github, bin, obj, chunks
+#
+# Agregue aquí directorios ADICIONALES a excluir:
+# exclude_dirs:
+#   - MiCarpetaCustom
+#   - docs
+
+# ─── Extensiones excluidas ───────────────────────────────────────────────────
+# Defaults ya incluidos:
+#   .exe, .bin, .dll, .pdb, .user,
+#   .jpg, .jpeg, .png, .gif,
+#   .zip, .tar, .gz, .lock
+#
+# Agregue aquí extensiones ADICIONALES a excluir:
+# exclude_ext:
+#   - .log
+#   - .bak
+
+# ─── Archivos específicos excluidos ──────────────────────────────────────────
+# Defaults ya incluidos:
+#   requirements.txt, package-lock.json
+#
+# Agregue aquí archivos ADICIONALES a excluir (por nombre exacto):
+# exclude_files:
+#   - archivo-generado.json
+
+# ─── Extensiones válidas (archivos a procesar) ──────────────────────────────
+# Defaults ya incluidos:
+#   .cs, .csproj, .sln, .cshtml,
+#   .js, .ts,
+#   .md, .json, .yaml, .yml, .txt, .http
+#
+# Agregue aquí extensiones ADICIONALES a incluir:
+# extra_valid_ext:
+#   - .py
+#   - .razor
+#   - .html
+
+# ─── Parámetros de chunking ─────────────────────────────────────────────────
+# chunk_size: 800        # Tamaño de cada chunk en caracteres
+# chunk_overlap: 100     # Solapamiento entre chunks consecutivos
+
+# ─── ChromaDB (servidor HTTP) ───────────────────────────────────────────────
+# Los embeddings se generan server-side (all-MiniLM-L6-v2 incluido en la imagen Docker).
+# chroma_host: localhost        # Host del servidor ChromaDB (default)
+# chroma_port: 8000             # Puerto del servidor ChromaDB (default)
+# chroma_auth_token:            # Token de autenticación (vacío = sin auth)
+# collection_prefix: repo       # Prefijo para el nombre de la colección

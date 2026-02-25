@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Chunks output (generados, no se versionan)
+chunks/
+
+# Docker env (puede contener tokens)
+docker/.env
+
+# OS
+.DS_Store
+Thumbs.db

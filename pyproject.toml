@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code-context-mcp"
+version = "1.0.0"
+description = "Code context pipeline for AI assistants: chunks source code, indexes in ChromaDB, and serves via MCP."
+requires-python = ">=3.10"
+dependencies = [
+    "langchain-text-splitters",
+    "chromadb",
+    "tqdm",
+    "pyyaml",
+    "mcp[cli]",
+]
+
+[project.scripts]
+chunking-get = "chunking.get_chunks:main"
+chunking-ingest = "chunking.ingest_delta:main"
+chunking-mcp = "chunking.mcp_server:main"
+
+[tool.setuptools.packages.find]
+include = ["chunking*"]
