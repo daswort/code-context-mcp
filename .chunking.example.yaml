@@ -57,3 +57,11 @@
 # chroma_port: 8000             # Puerto del servidor ChromaDB (default)
 # chroma_auth_token:            # Token de autenticación (vacío = sin auth)
 # collection_prefix: repo       # Prefijo para el nombre de la colección
+
+# ─── HNSW Index Tuning ─────────────────────────────────────────────────────
+# Parámetros del índice HNSW de ChromaDB. Valores más altos mejoran recall
+# pero usan más memoria y tiempo de indexación.
+# ⚠️ Cambiar estos valores requiere recrear la colección (re-ingesta).
+# hnsw_space: cosine            # Espacio de distancia: cosine, l2, ip (default: cosine)
+# hnsw_ef_construction: 200     # Calidad de construcción del índice (default: 200)
+# hnsw_ef_search: 150           # Calidad de búsqueda / recall (default: 150)

@@ -22,11 +22,38 @@ from chromadb.config import Settings
 from chunking.config import load_config
 
 
+# ─── Constants ───────────────────────────────────────────────────────────────
+
+INGEST_BATCH_SIZE = 100
+
+LANG_MAP = {
+    ".py": "python", ".go": "go", ".ts": "typescript", ".js": "javascript",
+    ".cs": "csharp", ".cshtml": "csharp", ".csproj": "xml", ".sln": "xml",
+    ".md": "markdown", ".json": "json", ".yaml": "yaml", ".yml": "yaml",
+    ".html": "html", ".css": "css", ".txt": "text", ".http": "http",
+}
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def hash_text(text: str) -> str:
     """Devuelve un hash MD5 del texto."""
     return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+def build_metadata(rec: dict) -> dict:
+    """Construye metadatos enriquecidos para un chunk."""
+    file_path = rec["file"]
+    ext = os.path.splitext(file_path)[1]
+    return {
+        "file": file_path,
+        "chunk_id": rec["chunk_id"],
+        "tokens": rec["tokens"],
+        "ext": ext,
+        "language": LANG_MAP.get(ext, "other"),
+        "directory": os.path.dirname(file_path),
+        "filename": os.path.basename(file_path),
+    }
 
 
 def get_last_chunks_file(branch_dir: str) -> str:
@@ -174,8 +201,15 @@ def main() -> None:
 
     client = create_chroma_client(chroma_host, chroma_port, auth_token)
 
-    # No se especifica embedding_function — ChromaDB usa su default server-side
-    collection = client.get_or_create_collection(name=collection_name)
+    # Embeddings server-side con HNSW tuning desde config
+    collection = client.get_or_create_collection(
+        name=collection_name,
+        metadata={
+            "hnsw:space": cfg["hnsw_space"],
+            "hnsw:construction_ef": cfg["hnsw_ef_construction"],
+            "hnsw:search_ef": cfg["hnsw_ef_search"],
+        },
+    )
 
     changed, deleted_ids = detect_changes(branch_dir)
 
@@ -189,19 +223,17 @@ def main() -> None:
         # ChromaDB acepta delete en batch
         collection.delete(ids=deleted_ids)
 
-    # Upsert chunks nuevos/modificados
+    # Upsert chunks nuevos/modificados (en batch para minimizar llamadas HTTP)
     if changed:
-        print(f"🧠 Insertando {len(changed)} fragmentos en '{collection_name}' (embeddings server-side)")
-        for rec in tqdm(changed, desc="Actualizando"):
-            uid = f"{rec['file']}-{rec['chunk_id']}"
+        n_batches = (len(changed) + INGEST_BATCH_SIZE - 1) // INGEST_BATCH_SIZE
+        print(f"🧠 Insertando {len(changed)} fragmentos en '{collection_name}' ({n_batches} batches)")
+
+        for i in tqdm(range(0, len(changed), INGEST_BATCH_SIZE), desc="Actualizando"):
+            batch = changed[i:i + INGEST_BATCH_SIZE]
             collection.upsert(
-                ids=[uid],
-                documents=[rec["content"]],
-                metadatas=[{
-                    "file": rec["file"],
-                    "chunk_id": rec["chunk_id"],
-                    "tokens": rec["tokens"],
-                }],
+                ids=[f"{r['file']}-{r['chunk_id']}" for r in batch],
+                documents=[r["content"] for r in batch],
+                metadatas=[build_metadata(r) for r in batch],
             )
 
     summary = []

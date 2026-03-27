@@ -40,6 +40,10 @@ DEFAULT_CHROMA_PORT = 8000
 DEFAULT_CHROMA_AUTH_TOKEN = ""
 DEFAULT_COLLECTION_PREFIX = "repo"
 
+DEFAULT_HNSW_SPACE = "cosine"
+DEFAULT_HNSW_EF_CONSTRUCTION = 200
+DEFAULT_HNSW_EF_SEARCH = 150
+
 
 # ─── Loader ──────────────────────────────────────────────────────────────────
 
@@ -78,5 +82,8 @@ def load_config(repo_dir: str) -> dict:
         "chroma_port": int(user_cfg.get("chroma_port", DEFAULT_CHROMA_PORT)),
         "chroma_auth_token": user_cfg.get("chroma_auth_token", DEFAULT_CHROMA_AUTH_TOKEN),
         "collection_prefix": user_cfg.get("collection_prefix", DEFAULT_COLLECTION_PREFIX),
+        "hnsw_space": user_cfg.get("hnsw_space", DEFAULT_HNSW_SPACE),
+        "hnsw_ef_construction": int(user_cfg.get("hnsw_ef_construction", DEFAULT_HNSW_EF_CONSTRUCTION)),
+        "hnsw_ef_search": int(user_cfg.get("hnsw_ef_search", DEFAULT_HNSW_EF_SEARCH)),
     }
 

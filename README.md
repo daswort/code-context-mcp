@@ -12,7 +12,7 @@ Pipeline para segmentar código fuente en chunks, generar embeddings y almacenar
                      │ MCP (stdio)
 ┌────────────────────▼───────────────────────────────────┐
 │  chunking-mcp                                          │
-│  MCP Server liviano · 8 tools disponibles              │
+│  MCP Server liviano · 9 tools disponibles              │
 │  Sin modelo local — queries vía HTTP                   │
 └────────────────────┬───────────────────────────────────┘
                      │ HTTP
@@ -89,18 +89,21 @@ La ingesta es **delta**: detecta chunks nuevos, modificados y eliminados. Solo r
 
 ### 3. Buscar código (MCP)
 
-El MCP server expone 8 tools para AI assistants:
+### 3. Buscar código (MCP)
+
+El MCP server expone 9 tools para AI assistants:
 
 | Tool | Descripción |
 |------|-------------|
-| `search_code` | Búsqueda semántica por query de texto libre |
+| `search_code` | Búsqueda semántica (cosine distance) con filtros por extensión y lenguaje |
+| `search_exact` | Búsqueda full-text o regex exacto (no semántica, ideal para encontrar símbolos) |
 | `list_collections` | Lista todas las colecciones con conteos |
 | `get_collection_info` | Distribución de archivos y chunks por colección |
 | `get_file_chunks` | Todos los chunks de un archivo específico |
 | `peek_collection` | Vista previa de los primeros N documentos |
 | `delete_collection` | Eliminar una colección completa |
 | `get_document` | Obtener un chunk específico por ID |
-| `search_by_file_pattern` | Buscar archivos indexados por patrón en el path |
+| `search_by_file_pattern` | Buscar archivos indexados por patrón o extensión (`.go`, `.py`) |
 
 ### 4. Preview sin procesar (dry-run)
 
@@ -160,6 +163,11 @@ extra_valid_ext:
 # Parámetros de chunking
 chunk_size: 800
 chunk_overlap: 100
+
+# Tuning del índice HNSW (ChromaDB)
+hnsw_space: cosine            # cosine, l2, ip
+hnsw_ef_construction: 200     # Calidad de indexación
+hnsw_ef_search: 150           # Calidad de recall
 
 # ChromaDB
 collection_prefix: mi-proyecto     # → colección: mi-proyecto_main
@@ -312,7 +320,7 @@ code-context-mcp/
     ├── config.py                 # Defaults + merge con .chunking.yaml
     ├── get_chunks.py             # chunking-get: segmentación de código
     ├── ingest_delta.py           # chunking-ingest: ingesta delta en ChromaDB
-    └── mcp_server.py             # chunking-mcp: MCP server (8 tools)
+    └── mcp_server.py             # chunking-mcp: MCP server (9 tools)
 ```
 
 ## Requisitos
