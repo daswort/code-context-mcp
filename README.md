@@ -12,7 +12,7 @@ Pipeline para segmentar código fuente en chunks, generar embeddings y almacenar
                      │ MCP (stdio)
 ┌────────────────────▼───────────────────────────────────┐
 │  chunking-mcp                                          │
-│  MCP Server liviano · 9 tools disponibles              │
+│  MCP Server liviano · 10 tools de solo lectura          │
 │  Sin modelo local — queries vía HTTP                   │
 └────────────────────┬───────────────────────────────────┘
                      │ HTTP
@@ -91,19 +91,46 @@ La ingesta es **delta**: detecta chunks nuevos, modificados y eliminados. Solo r
 
 ### 3. Buscar código (MCP)
 
-El MCP server expone 9 tools para AI assistants:
+El MCP server expone herramientas con respuestas JSON limitadas para AI assistants:
 
 | Tool | Descripción |
 |------|-------------|
-| `search_code` | Búsqueda semántica (cosine distance) con filtros por extensión y lenguaje |
+| `search_repo` | Búsqueda semántica por alias de repo y branch, sin conocer la colección |
+| `search_code` | Búsqueda semántica por colección, con filtros por extensión y lenguaje |
 | `search_exact` | Búsqueda full-text o regex exacto (no semántica, ideal para encontrar símbolos) |
 | `list_collections` | Lista todas las colecciones con conteos |
-| `get_collection_info` | Distribución de archivos y chunks por colección |
-| `get_file_chunks` | Todos los chunks de un archivo específico |
+| `get_collection_summary` | Resumen de colección con estadísticas precalculadas |
+| `get_file_chunks` | Página acotada de chunks de un archivo específico |
 | `peek_collection` | Vista previa de los primeros N documentos |
-| `delete_collection` | Eliminar una colección completa |
 | `get_document` | Obtener un chunk específico por ID |
 | `search_by_file_pattern` | Buscar archivos indexados por patrón o extensión (`.go`, `.py`) |
+| `status` | Freshness del índice para un repo y branch |
+
+`chunking-ingest` escribe `index_manifest.json` junto a los chunks de cada rama.
+Incluye repo, colección, SHA, branch, fecha, estado dirty y estadísticas agregadas.
+El proceso MCP debe tener acceso a ese directorio. Por defecto usa `./chunks`; se puede
+configurar con `CODE_CONTEXT_CHUNKS_DIR`:
+
+```json
+{
+  "env": {
+    "CODE_CONTEXT_CHUNKS_DIR": "/ruta/a/chunks"
+  }
+}
+```
+
+Los resultados incluyen `freshness` (`ok`, `stale` o `unknown`) y una advertencia:
+el índice semántico sirve para descubrir candidatos, no como evidencia final. Verifique
+el archivo real antes de citarlo. Cada búsqueda se limita a 10 resultados, 4.000
+caracteres por snippet y 12 KB de salida.
+
+Los archivos `.sql` se clasifican como `tsql`; use `language: "tsql"` para filtrar
+procedimientos y scripts SQL. Tras esta actualización, ejecute `chunking-ingest` una
+vez por colección existente para renovar esa metadata.
+
+El servidor MCP es de sólo lectura: no expone operaciones para eliminar colecciones.
+Después de actualizar el paquete o sus variables de entorno, reinicie el cliente MCP
+para que vuelva a cargar las herramientas y el directorio de manifests.
 
 ### 4. Preview sin procesar (dry-run)
 
@@ -291,7 +318,7 @@ docker compose down
 docker compose down -v
 ```
 
-Los datos persisten en un named volume (`code-context-chroma-data`). Se mantienen entre reinicios del contenedor.
+Los datos persisten en un named volume (`code-context-chroma-data`) montado en `/data`, la ruta de persistencia de Chroma `1.5.6`. Se mantienen entre reinicios del contenedor. La imagen local añade BusyBox exclusivamente para ejecutar un healthcheck HTTP real contra `/api/v2/heartbeat`.
 
 ## Script de orquestación
 
@@ -320,7 +347,7 @@ code-context-mcp/
     ├── config.py                 # Defaults + merge con .chunking.yaml
     ├── get_chunks.py             # chunking-get: segmentación de código
     ├── ingest_delta.py           # chunking-ingest: ingesta delta en ChromaDB
-    └── mcp_server.py             # chunking-mcp: MCP server (9 tools)
+    └── mcp_server.py             # chunking-mcp: MCP server (10 tools de solo lectura)
 ```
 
 ## Requisitos

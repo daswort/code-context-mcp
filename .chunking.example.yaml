@@ -57,6 +57,8 @@
 # chroma_port: 8000             # Puerto del servidor ChromaDB (default)
 # chroma_auth_token:            # Token de autenticación (vacío = sin auth)
 # collection_prefix: repo       # Prefijo para el nombre de la colección
+# repo_name:                    # Alias opcional para search_repo (default: directorio)
+# embedding_model: unknown      # Identificador del modelo configurado en Chroma
 
 # ─── HNSW Index Tuning ─────────────────────────────────────────────────────
 # Parámetros del índice HNSW de ChromaDB. Valores más altos mejoran recall

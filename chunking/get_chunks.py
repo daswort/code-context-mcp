@@ -7,7 +7,6 @@ Uso:
 
 import os
 import json
-import ast
 import argparse
 import subprocess
 
@@ -36,24 +35,8 @@ def is_valid_file(path: str, cfg: dict) -> bool:
 
 def extract_text(filepath: str) -> str:
     try:
-        if filepath.endswith(".py"):
-            with open(filepath, "r", encoding="utf-8") as f:
-                source = f.read()
-            try:
-                tree = ast.parse(source)
-                docstrings = []
-                for node in ast.walk(tree):
-                    if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                        doc = ast.get_docstring(node)
-                        if doc:
-                            docstrings.append(doc)
-                return "\n".join(docstrings) + "\n" + source
-            except Exception as e:
-                print(f"[WARN] Error AST en {filepath}: {e}")
-                return source
-        else:
-            with open(filepath, "r", encoding="utf-8") as f:
-                return f.read()
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read()
     except Exception as e:
         print(f"[WARN] No se pudo leer {filepath}: {e}")
         return ""
@@ -66,10 +49,20 @@ def chunk_text(text: str, file_path: str, cfg: dict) -> list[dict]:
         length_function=len,
     )
     chunks = splitter.split_text(text)
-    return [
-        {"file": file_path, "chunk_id": i, "content": chunk, "tokens": len(chunk)}
-        for i, chunk in enumerate(chunks)
-    ]
+    records = []
+    search_offset = 0
+    for chunk_id, chunk in enumerate(chunks):
+        start_offset = text.find(chunk, search_offset)
+        if start_offset < 0:
+            start_offset = text.find(chunk)
+        end_offset = start_offset + len(chunk) if start_offset >= 0 else -1
+        record = {"file": file_path, "chunk_id": chunk_id, "content": chunk, "tokens": len(chunk)}
+        if start_offset >= 0:
+            record["start_line"] = text.count("\n", 0, start_offset) + 1
+            record["end_line"] = text.count("\n", 0, end_offset) + 1
+            search_offset = start_offset + 1
+        records.append(record)
+    return records
 
 
 def collect_valid_files(root_dir: str, cfg: dict) -> list[str]:
