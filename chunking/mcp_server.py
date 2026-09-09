@@ -140,8 +140,8 @@ def _freshness_details(manifest: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def _collection_context(collection: str) -> dict[str, Any]:
-    manifest = _load_manifests().get(collection)
+def _collection_context(collection: str, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
+    manifest = _load_manifests().get(collection) if manifest is None else manifest
     return {
         "collection": collection,
         "repo": manifest.get("repo") if manifest else None,
@@ -152,6 +152,28 @@ def _collection_context(collection: str) -> dict[str, Any]:
     }
 
 
+def _repo_root(manifest: dict[str, Any] | None) -> str | None:
+    """Absolute repo root the collection was indexed from; `None` when the manifest cannot say."""
+    root = manifest.get("repo_path") if manifest else None
+    return root.rstrip("/") if isinstance(root, str) and root else None
+
+
+def _public_path(path: Any, root: str | None) -> Any:
+    """Repo-relative form of an indexed path: the only form an answer, ticket or PR may quote.
+    Returned unchanged when the root is unknown or the path lies outside it."""
+    if not isinstance(path, str) or not root:
+        return path
+    prefix = f"{root}/"
+    return path[len(prefix):] if path.startswith(prefix) else path
+
+
+def _stored_path(path: str, root: str | None) -> str:
+    """The absolute form the index stores, so a caller may pass either form back."""
+    if not root or path.startswith("/"):
+        return path
+    return f"{root}/{path}"
+
+
 def _error(message: str, hint: str | None = None) -> dict[str, Any]:
     response: dict[str, Any] = {"error": message}
     if hint:
@@ -159,7 +181,8 @@ def _error(message: str, hint: str | None = None) -> dict[str, Any]:
     return response
 
 
-def _result_items(results: dict[str, Any], context: dict[str, Any]) -> list[dict[str, Any]]:
+def _result_items(results: dict[str, Any], context: dict[str, Any],
+                  root: str | None = None) -> list[dict[str, Any]]:
     items = []
     remaining = MAX_TOTAL_CHARS
     for document, metadata, distance in zip(
@@ -170,7 +193,7 @@ def _result_items(results: dict[str, Any], context: dict[str, Any]) -> list[dict
         snippet = document[:min(MAX_SNIPPET_CHARS, remaining)]
         remaining -= len(snippet)
         items.append({
-            "file": metadata.get("file"),
+            "file": _public_path(metadata.get("file"), root),
             "abs_path": metadata.get("file"),
             "chunk_id": metadata.get("chunk_id"),
             "score": round(1 - distance, 4) if distance is not None else None,
@@ -224,11 +247,14 @@ def search_code(
         where_document=where_doc,
     )
 
-    if not results["documents"] or not results["documents"][0]:
-        return {**_collection_context(collection), "results": [], "warnings": [INDEX_WARNING]}
+    manifest = _load_manifests().get(collection)
+    context = _collection_context(collection, manifest)
 
-    context = _collection_context(collection)
-    return {**context, "results": _result_items(results, context), "warnings": [INDEX_WARNING]}
+    if not results["documents"] or not results["documents"][0]:
+        return {**context, "results": [], "warnings": [INDEX_WARNING]}
+
+    items = _result_items(results, context, _repo_root(manifest))
+    return {**context, "results": items, "warnings": [INDEX_WARNING]}
 
 
 @mcp.tool()
@@ -306,16 +332,21 @@ def get_file_chunks(collection: str, file_path: str, limit: int = 10, offset: in
     except Exception:
         return _error("collection_not_found")
 
+    manifest = _load_manifests().get(collection)
+    root = _repo_root(manifest)
+    stored = _stored_path(file_path, root)
+
     page_limit = _limit(limit, MAX_DOCUMENTS_PER_RESPONSE)
     results = col.get(
-        where={"file": file_path},
+        where={"file": stored},
         include=["documents", "metadatas"],
         limit=page_limit,
         offset=max(0, offset),
     )
 
     if not results["documents"]:
-        return {**_collection_context(collection), "file": file_path, "chunks": [], "next_offset": None}
+        return {**_collection_context(collection, manifest), "file": _public_path(stored, root),
+                "abs_path": stored, "chunks": [], "next_offset": None}
 
     # Ordenar por chunk_id
     pairs = sorted(
@@ -338,8 +369,9 @@ def get_file_chunks(collection: str, file_path: str, limit: int = 10, offset: in
         })
 
     return {
-        **_collection_context(collection),
-        "file": file_path,
+        **_collection_context(collection, manifest),
+        "file": _public_path(stored, root),
+        "abs_path": stored,
         "chunks": chunks,
         "ordering": "chunk_id_within_page",
         "next_offset": offset + len(pairs) if len(pairs) == page_limit else None,
@@ -369,9 +401,11 @@ def peek_collection(collection: str, limit: int = 5) -> dict[str, Any]:
         return _error("collection_not_found")
 
     results = col.peek(limit=limit)
+    manifest = _load_manifests().get(collection)
+    root = _repo_root(manifest)
 
     if not results["documents"]:
-        return {**_collection_context(collection), "documents": [], "warnings": [INDEX_WARNING]}
+        return {**_collection_context(collection, manifest), "documents": [], "warnings": [INDEX_WARNING]}
 
     remaining = MAX_TOTAL_CHARS
     documents = []
@@ -381,11 +415,12 @@ def peek_collection(collection: str, limit: int = 5) -> dict[str, Any]:
         snippet = document[:min(MAX_SNIPPET_CHARS, remaining)]
         remaining -= len(snippet)
         documents.append({
-            "file": metadata.get("file"),
+            "file": _public_path(metadata.get("file"), root),
             "chunk_id": metadata.get("chunk_id"),
             "snippet": snippet,
         })
-    return {**_collection_context(collection), "documents": documents, "warnings": [INDEX_WARNING]}
+    return {**_collection_context(collection, manifest), "documents": documents,
+            "warnings": [INDEX_WARNING]}
 
 
 @mcp.tool()
@@ -414,11 +449,13 @@ def get_document(collection: str, document_id: str) -> dict[str, Any]:
 
     doc = results["documents"][0]
     meta = results["metadatas"][0]
+    manifest = _load_manifests().get(collection)
     return {
-        **_collection_context(collection),
+        **_collection_context(collection, manifest),
         "document": {
             "id": document_id,
-            "file": meta.get("file"),
+            "file": _public_path(meta.get("file"), _repo_root(manifest)),
+            "abs_path": meta.get("file"),
             "chunk_id": meta.get("chunk_id"),
             "start_line": meta.get("start_line"),
             "end_line": meta.get("end_line"),
@@ -451,16 +488,17 @@ def search_by_file_pattern(collection: str, pattern: str, n_results: int = 10) -
     if not isinstance(files, dict):
         return _error("file_index_not_found", "Run chunking-ingest to refresh the manifest.")
 
+    root = _repo_root(manifest)
     normalized_pattern = pattern.lower()
     matches = [
-        {"file": file_path, "chunks": chunk_count}
+        {"file": _public_path(file_path, root), "chunks": chunk_count}
         for file_path, chunk_count in files.items()
         if normalized_pattern in file_path.lower()
     ]
     matches.sort(key=lambda item: (-item["chunks"], item["file"]))
     limit = _limit(n_results)
     return {
-        **_collection_context(collection),
+        **_collection_context(collection, manifest),
         "pattern": pattern,
         "files": matches[:limit],
         "total_matches": len(matches),
@@ -523,7 +561,9 @@ def search_exact(
         limit=_limit(n_results),
     )
 
-    context = _collection_context(collection)
+    manifest = _load_manifests().get(collection)
+    context = _collection_context(collection, manifest)
+    root = _repo_root(manifest)
     items = []
     remaining = MAX_TOTAL_CHARS
     for document, metadata in zip(results["documents"], results["metadatas"]):
@@ -532,7 +572,7 @@ def search_exact(
         snippet = document[:min(MAX_SNIPPET_CHARS, remaining)]
         remaining -= len(snippet)
         items.append({
-            "file": metadata.get("file"),
+            "file": _public_path(metadata.get("file"), root),
             "abs_path": metadata.get("file"),
             "chunk_id": metadata.get("chunk_id"),
             "start_line": metadata.get("start_line"),

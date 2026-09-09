@@ -31,6 +31,42 @@ class McpServerTests(unittest.TestCase):
         self.assertEqual(sum(len(item["snippet"]) for item in items), mcp_server.MAX_TOTAL_CHARS)
         self.assertTrue(all(len(item["snippet"]) <= mcp_server.MAX_SNIPPET_CHARS for item in items))
 
+    def test_result_items_expose_repo_relative_file_and_absolute_abs_path(self) -> None:
+        results = {
+            "documents": [["print(1)"]],
+            "metadatas": [[{"file": "/repo/src/main.py", "start_line": 1, "end_line": 2}]],
+            "distances": [[0.1]],
+        }
+        [item] = mcp_server._result_items(results, {"git_sha": "abc"}, "/repo")
+        self.assertEqual(item["file"], "src/main.py")
+        self.assertEqual(item["abs_path"], "/repo/src/main.py")
+        self.assertFalse(item["file"].startswith("/"))
+        self.assertTrue(item["abs_path"].startswith("/"))
+
+    def test_paths_round_trip_and_survive_an_unknown_repo_root(self) -> None:
+        self.assertEqual(mcp_server._repo_root({"repo_path": "/repo/"}), "/repo")
+        self.assertIsNone(mcp_server._repo_root(None))
+        # una ruta que el servidor devolvió puede volver en cualquiera de las dos formas
+        self.assertEqual(mcp_server._stored_path("src/main.py", "/repo"), "/repo/src/main.py")
+        self.assertEqual(mcp_server._stored_path("/repo/src/main.py", "/repo"), "/repo/src/main.py")
+        # sin raíz conocida, o fuera del repo, la ruta no se toca
+        self.assertEqual(mcp_server._public_path("/other/x.py", "/repo"), "/other/x.py")
+        self.assertEqual(mcp_server._public_path("/repo/x.py", None), "/repo/x.py")
+        self.assertIsNone(mcp_server._public_path(None, "/repo"))
+
+    def test_file_pattern_search_returns_repo_relative_files(self) -> None:
+        manifests = {
+            "repo_main": {
+                "collection": "repo_main", "repo": "repo", "branch": "main",
+                "repo_path": "/repo", "files": {"/repo/sql/a.sql": 3, "/repo/sql/b.sql": 1},
+            }
+        }
+        with patch.object(mcp_server, "_load_manifests", return_value=manifests), patch.object(
+            mcp_server, "_freshness", return_value="unknown"
+        ):
+            response = mcp_server.search_by_file_pattern("repo_main", ".sql", 5)
+        self.assertEqual([f["file"] for f in response["files"]], ["sql/a.sql", "sql/b.sql"])
+
     def test_resolve_repo_requires_branch_for_ambiguous_repo(self) -> None:
         manifests = {
             "repo_main": {"collection": "repo_main", "repo": "repo", "branch": "main"},

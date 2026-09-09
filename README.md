@@ -89,9 +89,11 @@ La ingesta es **delta**: detecta chunks nuevos, modificados y eliminados. Solo r
 
 ### 3. Buscar código (MCP)
 
-### 3. Buscar código (MCP)
-
 El MCP server expone herramientas con respuestas JSON limitadas para AI assistants:
+
+Contrato de rutas: `file` es relativa a la raíz del repo indexado y es la única forma que puede
+citarse en respuestas, tickets o PRs; `abs_path` es absoluta y sirve solo para abrir el archivo en
+la máquina local. Las herramientas que reciben una ruta aceptan cualquiera de las dos formas.
 
 | Tool | Descripción |
 |------|-------------|
