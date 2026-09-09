@@ -54,6 +54,18 @@ class McpServerTests(unittest.TestCase):
         self.assertEqual(mcp_server._public_path("/repo/x.py", None), "/repo/x.py")
         self.assertIsNone(mcp_server._public_path(None, "/repo"))
 
+    def test_file_pattern_search_rejects_an_empty_pattern(self) -> None:
+        manifests = {"repo_main": {"collection": "repo_main", "repo": "repo", "branch": "main",
+                                   "repo_path": "/repo", "files": {"/repo/a.py": 1}}}
+        with patch.object(mcp_server, "_load_manifests", return_value=manifests):
+            response = mcp_server.search_by_file_pattern("repo_main", "   ", 5)
+        self.assertEqual(response["error"], "missing_pattern")
+        self.assertIn("hint", response)
+
+    def test_exact_search_rejects_an_oversized_regex(self) -> None:
+        response = mcp_server.search_exact("repo_main", regex="x" * (mcp_server.MAX_REGEX_CHARS + 1))
+        self.assertEqual(response["error"], "regex_too_long")
+
     def test_file_pattern_search_returns_repo_relative_files(self) -> None:
         manifests = {
             "repo_main": {

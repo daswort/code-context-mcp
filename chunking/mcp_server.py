@@ -11,6 +11,7 @@ Uso:
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -19,6 +20,10 @@ from typing import Any
 import chromadb
 from chromadb.config import Settings
 from mcp.server.fastmcp import FastMCP
+
+# Chroma's HTTP client logs one INFO line per request; the diagnostics matter more than the traffic.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # ─── Server ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +35,8 @@ CHROMA_PORT = int(os.environ.get("CHROMA_PORT", "8000"))
 CHROMA_AUTH_TOKEN = os.environ.get("CHROMA_AUTH_TOKEN", "")
 CHUNKS_DIR = Path(os.environ.get("CODE_CONTEXT_CHUNKS_DIR", Path(__file__).parent.parent / "chunks"))
 MAX_RESULTS = 10
+#: A regex longer than this is a caller mistake, not a search.
+MAX_REGEX_CHARS = 200
 MAX_SNIPPET_CHARS = 4_000
 MAX_TOTAL_CHARS = 12_000
 MAX_DOCUMENTS_PER_RESPONSE = MAX_TOTAL_CHARS // MAX_SNIPPET_CHARS
@@ -481,6 +488,9 @@ def search_by_file_pattern(collection: str, pattern: str, n_results: int = 10) -
     Returns:
         Lista de archivos que coinciden con el patrón
     """
+    if not pattern.strip():
+        return _error("missing_pattern", "Specify a path fragment or an extension, for example '.sql'.")
+
     manifest = _load_manifests().get(collection)
     if not manifest:
         return _error("manifest_not_found", "Run chunking-ingest to create a file index.")
@@ -534,6 +544,8 @@ def search_exact(
     """
     if not contains and not regex:
         return _error("missing_search_term", "Specify contains or regex.")
+    if regex and len(regex) > MAX_REGEX_CHARS:
+        return _error("regex_too_long", f"Shorten the pattern to {MAX_REGEX_CHARS} characters or fewer.")
 
     client = _get_client()
 
