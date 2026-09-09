@@ -94,3 +94,17 @@ class GetChunksLeavesGitAloneTests(unittest.TestCase):
             self.assertNotEqual(out.returncode, 0)
             self.assertIn("checkout dev", out.stdout + out.stderr)
             self.assertEqual(_git(repo, "branch", "--show-current"), "main")
+
+
+class IngestManifestCannotLieTests(unittest.TestCase):
+    def test_ingest_refuses_a_branch_that_is_not_active(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = _repo(root)
+            out = subprocess.run(
+                [sys.executable, "-m", "chunking.ingest_delta", "dev",
+                 "--repo", str(repo), "--chunks-dir", str(root / "chunks")],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(out.returncode, 0)
+            self.assertIn("está en 'main'", out.stdout + out.stderr)

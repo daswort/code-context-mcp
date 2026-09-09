@@ -23,6 +23,7 @@ import chromadb
 from chromadb.config import Settings
 
 from chunking.config import load_config
+from chunking.git_state import resolve_branch
 
 
 # ─── Constants ───────────────────────────────────────────────────────────────
@@ -246,7 +247,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Actualiza embeddings delta para una rama (vía ChromaDB HTTP)."
     )
-    parser.add_argument("branch", nargs="?", help="Nombre de la rama Git a procesar.")
+    parser.add_argument("branch", nargs="?",
+                        help="Rama Git a procesar. Debe ser la rama activa: el indexador no cambia "
+                             "de rama. Omitila junto con --current-tree.")
     parser.add_argument(
         "--repo", default=".",
         help="Ruta al repositorio (para leer .chunking.yaml). Default: directorio actual.",
@@ -271,17 +274,18 @@ def main() -> None:
         "--repo-name", default=None,
         help="Alias del repositorio para buscarlo desde MCP (default: nombre del directorio).",
     )
+    parser.add_argument(
+        "--current-tree",
+        action="store_true",
+        help="Indexa la rama activa tal como está en disco, sin comparar con un nombre declarado.",
+    )
     args = parser.parse_args()
 
-    if not args.branch:
-        print("❌ Error: debes especificar el nombre de la rama.\n")
-        print("Uso: chunking-ingest <nombre_rama>")
-        sys.exit(1)
-
     repo_dir = os.path.abspath(args.repo)
+    branch = resolve_branch(repo_dir, args.branch, args.current_tree)
     cfg = load_config(repo_dir)
 
-    safe_branch = args.branch.replace("/", "-").replace("\\", "-")
+    safe_branch = branch.replace("/", "-").replace("\\", "-")
     chunks_dir = os.path.abspath(args.chunks_dir)
     branch_dir = os.path.join(chunks_dir, safe_branch)
 
@@ -293,7 +297,7 @@ def main() -> None:
     if args.repo_name:
         cfg["repo_name"] = args.repo_name
 
-    print(f"🚀 Iniciando actualización de embeddings para rama '{args.branch}'")
+    print(f"🚀 Iniciando actualización de embeddings para rama '{branch}'")
     print(f"📡 Conectando a ChromaDB en {chroma_host}:{chroma_port}")
 
     client = create_chroma_client(chroma_host, chroma_port, auth_token)
@@ -316,7 +320,7 @@ def main() -> None:
         save_state(branch_dir, new_state)
         save_manifest(
             branch_dir,
-            collection_manifest(repo_dir, args.branch, collection_name, cfg, new_state),
+            collection_manifest(repo_dir, branch, collection_name, cfg, new_state),
         )
         print("✅ No hay cambios. Nada que actualizar.")
         return
@@ -343,7 +347,7 @@ def main() -> None:
     save_state(branch_dir, new_state)
     save_manifest(
         branch_dir,
-        collection_manifest(repo_dir, args.branch, collection_name, cfg, new_state),
+        collection_manifest(repo_dir, branch, collection_name, cfg, new_state),
     )
 
     summary = []
