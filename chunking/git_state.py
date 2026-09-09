@@ -26,16 +26,14 @@ def resolve_branch(repo_dir: str, declared: str | None, current_tree: bool) -> s
     The indexer never checks out and never pulls: a declared branch that is not the active one is
     a mistake to report, not a repo to move.
     """
-    active = active_branch(repo_dir)
-    if current_tree:
-        if not active:
-            sys.exit(f"❌ {repo_dir} no está en una rama (HEAD suelto o no es un repo Git).")
-        return active
-    if not declared:
+    if not current_tree and not declared:
         sys.exit("❌ Falta el nombre de la rama. Pásala como argumento, o usa --current-tree "
                  "para indexar la rama activa tal como está en disco.")
+    active = active_branch(repo_dir)
     if not active:
         sys.exit(f"❌ {repo_dir} no está en una rama (HEAD suelto o no es un repo Git).")
+    if current_tree:
+        return active
     if declared != active:
         sys.exit(f"❌ Pediste indexar '{declared}' pero el repo está en '{active}'. El indexador no "
                  f"cambia de rama ni hace pull. Ejecuta:\n"
