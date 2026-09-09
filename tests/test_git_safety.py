@@ -108,3 +108,5 @@ class IngestManifestCannotLieTests(unittest.TestCase):
             )
             self.assertNotEqual(out.returncode, 0)
             self.assertIn("está en 'main'", out.stdout + out.stderr)
+            # la guarda corre antes de crear el cliente: no debe haber intento de conexión
+            self.assertNotIn("Conectando a ChromaDB", out.stdout + out.stderr)

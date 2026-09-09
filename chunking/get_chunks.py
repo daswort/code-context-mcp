@@ -17,7 +17,7 @@ import argparse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from chunking.config import load_config
-from chunking.git_state import resolve_branch
+from chunking.git_state import BRANCH_HELP, CURRENT_TREE_HELP, resolve_branch
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -147,9 +147,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Segmenta el código fuente en chunks por rama."
     )
-    parser.add_argument("branch", nargs="?",
-                        help="Rama Git a procesar. Debe ser la rama activa: el indexador no cambia "
-                             "de rama. Omitila junto con --current-tree.")
+    parser.add_argument("branch", nargs="?", help=BRANCH_HELP)
     parser.add_argument(
         "--repo",
         default=".",
@@ -168,7 +166,7 @@ def main() -> None:
     parser.add_argument(
         "--current-tree",
         action="store_true",
-        help="Indexa la rama activa tal como está en disco, sin comparar con un nombre declarado.",
+        help=CURRENT_TREE_HELP,
     )
     args = parser.parse_args()
 

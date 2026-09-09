@@ -9,6 +9,13 @@ import subprocess
 import sys
 
 
+BRANCH_HELP = ("Rama Git a procesar. Debe ser la rama activa: el indexador no cambia de rama. "
+               "Omítela junto con --current-tree.")
+
+CURRENT_TREE_HELP = ("Indexa la rama activa tal como está en disco, sin comparar con un nombre "
+                     "declarado.")
+
+
 def active_branch(repo_dir: str) -> str | None:
     """The checked-out branch, or `None` outside a repo or on a detached HEAD."""
     try:
