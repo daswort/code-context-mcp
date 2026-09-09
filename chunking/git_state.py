@@ -32,14 +32,14 @@ def resolve_branch(repo_dir: str, declared: str | None, current_tree: bool) -> s
             sys.exit(f"❌ {repo_dir} no está en una rama (HEAD suelto o no es un repo Git).")
         return active
     if not declared:
-        sys.exit("❌ Falta el nombre de la rama. Pasala como argumento, o usá --current-tree "
+        sys.exit("❌ Falta el nombre de la rama. Pásala como argumento, o usa --current-tree "
                  "para indexar la rama activa tal como está en disco.")
     if not active:
         sys.exit(f"❌ {repo_dir} no está en una rama (HEAD suelto o no es un repo Git).")
     if declared != active:
         sys.exit(f"❌ Pediste indexar '{declared}' pero el repo está en '{active}'. El indexador no "
-                 f"cambia de rama ni hace pull. Corré vos:\n"
+                 f"cambia de rama ni hace pull. Ejecuta:\n"
                  f"    git -C {repo_dir} checkout {declared}\n"
                  f"    git -C {repo_dir} pull origin {declared}\n"
-                 f"o volvé a llamar con --current-tree para indexar '{active}'.")
+                 f"o vuelve a llamar con --current-tree para indexar '{active}'.")
     return declared
