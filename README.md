@@ -12,7 +12,7 @@ Pipeline para segmentar código fuente en chunks, generar embeddings y almacenar
                      │ MCP (stdio)
 ┌────────────────────▼───────────────────────────────────┐
 │  chunking-mcp                                          │
-│  MCP Server liviano · 10 tools de solo lectura          │
+│  MCP Server liviano · 10 tools de solo lectura         │
 │  Sin modelo local — queries vía HTTP                   │
 └────────────────────┬───────────────────────────────────┘
                      │ HTTP
