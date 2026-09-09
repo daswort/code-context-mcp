@@ -5,6 +5,12 @@ ChromaDB genera los embeddings server-side — el cliente solo envía texto.
 
 Uso:
     chunking-ingest <branch> [--repo .] [--chunks-dir ./chunks]
+    chunking-ingest --current-tree [--repo .] [--chunks-dir ./chunks]
+
+`<branch>` debe ser la rama activa del repo: este comando no hace checkout ni pull, y falla con
+instrucciones accionables si no coincide. `--current-tree` usa la rama activa; si se pasa un
+nombre de todos modos, lo ignora. El manifiesto describe el árbol que `chunking-get` indexó,
+leyéndolo de `tree_state.json`, no el árbol del momento de la ingesta.
                               [--chroma-host localhost] [--chroma-port 8000]
                               [--collection-prefix repo]
 """

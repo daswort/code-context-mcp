@@ -64,8 +64,9 @@ chunking-get main --repo ~/projects/agenda2-app --output ~/projects/chunking/chu
 ```
 
 Para indexar lo que hay en disco sin declarar el nombre de la rama, `--current-tree` toma la rama
-activa. Es la forma recomendada cuando el árbol tiene cambios sin commitear: el manifiesto los
-registra con `dirty: true`.
+activa. Sirve cuando el árbol tiene cambios sin commitear, con un costo que conviene saber: el
+manifiesto queda con `dirty: true`, la herramienta `status` del MCP devuelve `stale` y `kb doctor`
+reporta ese repo como WARN hasta que se reindexe con el árbol limpio.
 
 ```bash
 chunking-get --current-tree --repo ~/projects/agenda2-app --output ~/projects/chunking/chunks/agenda2-app
@@ -154,7 +155,9 @@ para que vuelva a cargar las herramientas y el directorio de manifests.
 chunking-get --current-tree --repo ~/projects/mi-repo --dry-run
 ```
 
-Lista los archivos que se procesarían, agrupados por extensión, sin ejecutar nada:
+Lista los archivos que se procesarían, agrupados por extensión, sin ejecutar nada. La verificación
+de rama corre antes que el listado, así que un dry-run sobre un directorio que no es repo Git, con
+HEAD suelto, o declarando una rama que no es la activa, falla sin listar nada.
 
 ```
 🔎 Dry-run para repo '/home/user/projects/mi-repo' (rama 'main')
