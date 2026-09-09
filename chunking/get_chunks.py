@@ -3,6 +3,11 @@ Segmenta el código fuente de un repositorio en chunks y los guarda como JSONL.
 
 Uso:
     chunking-get <branch> [--repo .] [--output ./chunks] [--dry-run]
+    chunking-get --current-tree [--repo .] [--output ./chunks] [--dry-run]
+
+`<branch>` debe ser la rama activa del repo: el indexador no hace checkout ni pull, y falla con
+instrucciones accionables si no coincide. `--current-tree` indexa la rama activa y no necesita el
+nombre; si se pasa uno de todos modos, lo ignora.
 """
 
 import os

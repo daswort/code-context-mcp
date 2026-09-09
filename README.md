@@ -51,6 +51,9 @@ Esto instala 3 comandos CLI:
 
 ### 1. Segmentar código
 
+El indexador **nunca mueve el repo**: no hace `checkout` ni `pull`. La rama que se declara tiene
+que ser la rama activa, y si no coincide el comando falla indicando las órdenes a ejecutar.
+
 ```bash
 chunking-get <rama> --repo /ruta/al/repo --output /ruta/chunks/mi-repo
 ```
@@ -59,6 +62,17 @@ Ejemplo:
 ```bash
 chunking-get main --repo ~/projects/agenda2-app --output ~/projects/chunking/chunks/agenda2-app
 ```
+
+Para indexar lo que hay en disco sin declarar el nombre de la rama, `--current-tree` toma la rama
+activa. Es la forma recomendada cuando el árbol tiene cambios sin commitear: el manifiesto los
+registra con `dirty: true`.
+
+```bash
+chunking-get --current-tree --repo ~/projects/agenda2-app --output ~/projects/chunking/chunks/agenda2-app
+```
+
+`chunking-ingest` acepta las mismas dos formas y la misma verificación, para que el manifiesto no
+pueda declarar una rama distinta de la que apunta su `git_sha`.
 
 Esto genera un archivo JSONL con todos los fragmentos del código fuente:
 ```
@@ -137,7 +151,7 @@ para que vuelva a cargar las herramientas y el directorio de manifests.
 ### 4. Preview sin procesar (dry-run)
 
 ```bash
-chunking-get main --repo ~/projects/mi-repo --dry-run
+chunking-get --current-tree --repo ~/projects/mi-repo --dry-run
 ```
 
 Lista los archivos que se procesarían, agrupados por extensión, sin ejecutar nada:
