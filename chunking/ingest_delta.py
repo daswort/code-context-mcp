@@ -23,7 +23,8 @@ import chromadb
 from chromadb.config import Settings
 
 from chunking.config import load_config
-from chunking.git_state import BRANCH_HELP, CURRENT_TREE_HELP, resolve_branch
+from chunking.git_state import (BRANCH_HELP, CURRENT_TREE_HELP, TREE_STATE_FILE,
+                                resolve_branch)
 
 
 # ─── Constants ───────────────────────────────────────────────────────────────
@@ -176,8 +177,14 @@ def collection_manifest(
     collection: str,
     cfg: dict,
     state: dict[str, str],
+    tree: dict | None = None,
 ) -> dict:
-    """Construye metadata de procedencia reproducible para una colección."""
+    """Construye metadata de procedencia reproducible para una colección.
+
+    `tree` is the sha/dirty pair `chunking-get` recorded for the chunks being ingested. Without it
+    the manifest falls back to sampling git now, which is only correct when the tree has not moved
+    between the two commands.
+    """
     ignore_settings = {
         "exclude_dirs": sorted(cfg["exclude_dirs"]),
         "exclude_ext": sorted(cfg["exclude_ext"]),
@@ -187,6 +194,13 @@ def collection_manifest(
     ignore_hash = hashlib.sha256(
         json.dumps(ignore_settings, sort_keys=True).encode("utf-8")
     ).hexdigest()
+    recorded = tree or {}
+    chunked_branch = recorded.get("branch")
+    if chunked_branch and chunked_branch != branch:
+        raise ValueError(
+            f"la procedencia dice que se indexó '{chunked_branch}' y el manifiesto iba a declarar "
+            f"'{branch}': no se escribe un manifiesto que se contradice"
+        )
     files = [key.rsplit(":", 1)[0] for key in state]
     file_chunks: dict[str, int] = {}
     languages: dict[str, int] = {}
@@ -201,9 +215,10 @@ def collection_manifest(
         "collection": collection,
         "repo_path": repo_dir,
         "branch": branch,
-        "git_sha": git_value(repo_dir, "rev-parse", "HEAD"),
+        "git_sha": recorded.get("git_sha") or git_value(repo_dir, "rev-parse", "HEAD"),
         "indexed_at": datetime.now(timezone.utc).isoformat(),
-        "dirty": bool(git_value(repo_dir, "status", "--porcelain")),
+        "dirty": (recorded["dirty"] if "dirty" in recorded
+                  else bool(git_value(repo_dir, "status", "--porcelain"))),
         "indexer_version": version("code-context-mcp"),
         "chunk_metadata_version": CHUNK_METADATA_VERSION,
         "embedding_model": cfg["embedding_model"],
@@ -295,6 +310,20 @@ def main() -> None:
     if args.repo_name:
         cfg["repo_name"] = args.repo_name
 
+    try:
+        get_last_chunks_file(branch_dir)
+    except FileNotFoundError as exc:
+        sys.exit(f"❌ {exc}\nEjecuta chunking-get para esta rama antes de la ingesta.")
+
+    tree_path = os.path.join(branch_dir, TREE_STATE_FILE)
+    chunked_tree = None
+    if os.path.exists(tree_path):
+        try:
+            with open(tree_path, encoding="utf-8") as f:
+                chunked_tree = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            chunked_tree = None
+
     print(f"🚀 Iniciando actualización de embeddings para rama '{branch}'")
     print(f"📡 Conectando a ChromaDB en {chroma_host}:{chroma_port}")
 
@@ -318,7 +347,7 @@ def main() -> None:
         save_state(branch_dir, new_state)
         save_manifest(
             branch_dir,
-            collection_manifest(repo_dir, branch, collection_name, cfg, new_state),
+            collection_manifest(repo_dir, branch, collection_name, cfg, new_state, chunked_tree),
         )
         print("✅ No hay cambios. Nada que actualizar.")
         return
@@ -345,7 +374,7 @@ def main() -> None:
     save_state(branch_dir, new_state)
     save_manifest(
         branch_dir,
-        collection_manifest(repo_dir, branch, collection_name, cfg, new_state),
+        collection_manifest(repo_dir, branch, collection_name, cfg, new_state, chunked_tree),
     )
 
     summary = []

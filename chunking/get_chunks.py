@@ -17,7 +17,8 @@ import argparse
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from chunking.config import load_config
-from chunking.git_state import BRANCH_HELP, CURRENT_TREE_HELP, resolve_branch
+from chunking.git_state import (BRANCH_HELP, CURRENT_TREE_HELP, TREE_STATE_FILE,
+                                resolve_branch, tree_state)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -190,8 +191,13 @@ def main() -> None:
     output_file = os.path.join(branch_dir, next_file)
 
     print("🚀 Iniciando limpieza y segmentación del código...")
+    observed = tree_state(repo_dir)
     data = process_repository(repo_dir, cfg)
     save_to_jsonl(data, output_file)
+    with open(os.path.join(branch_dir, TREE_STATE_FILE), "w", encoding="utf-8") as f:
+        json.dump({**observed, "branch": branch}, f, indent=2)
+    print(f"🔒 Procedencia: {observed['git_sha'][:8] if observed['git_sha'] else 'sin sha'}"
+          f"{', árbol sucio' if observed['dirty'] else ''}")
 
 
 if __name__ == "__main__":

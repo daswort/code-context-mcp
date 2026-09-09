@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import tempfile
@@ -97,6 +98,78 @@ class GetChunksLeavesGitAloneTests(unittest.TestCase):
 
 
 class IngestManifestCannotLieTests(unittest.TestCase):
+    def test_manifest_records_the_tree_that_was_chunked_not_the_one_at_ingest_time(self) -> None:
+        # chunking-get corre sobre un arbol y chunking-ingest escribe el manifiesto despues:
+        # si el manifiesto muestreara git de nuevo, etiquetaria contenido viejo con un sha nuevo
+        from chunking.config import load_config
+        from chunking.git_state import TREE_STATE_FILE
+        from chunking.ingest_delta import collection_manifest
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = _repo(root)
+            chunks = root / "chunks"
+            out = subprocess.run(
+                [sys.executable, "-m", "chunking.get_chunks", "--current-tree",
+                 "--repo", str(repo), "--output", str(chunks)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            chunked_sha = _git(repo, "rev-parse", "HEAD")
+            recorded = json.loads((chunks / "main" / TREE_STATE_FILE).read_text())
+            self.assertEqual(recorded["git_sha"], chunked_sha)
+
+            (repo / "a.txt").write_text("moved on")
+            _git(repo, "add", "a.txt")
+            _git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "v2")
+            self.assertNotEqual(_git(repo, "rev-parse", "HEAD"), chunked_sha)
+
+            manifest = collection_manifest(
+                str(repo), "main", "demo_main", load_config(str(repo)), {"a.txt:0": "h"}, recorded)
+            self.assertEqual(manifest["git_sha"], chunked_sha)
+            self.assertFalse(manifest["dirty"])
+
+    def test_manifest_branch_is_the_real_name_not_the_sanitized_one(self) -> None:
+        # el directorio y la coleccion se sanitizan (feature-x); el campo branch guarda feature/x
+        from chunking.config import load_config
+        from chunking.git_state import active_branch
+        from chunking.ingest_delta import collection_manifest
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = _repo(root)
+            _git(repo, "checkout", "-q", "-b", "feature/x")
+            manifest = collection_manifest(
+                str(repo), "feature/x", "demo_feature-x", load_config(str(repo)), {"a.txt:0": "h"})
+            self.assertEqual(manifest["branch"], "feature/x")
+            self.assertEqual(manifest["branch"], active_branch(str(repo)))
+            self.assertEqual(manifest["git_sha"], _git(repo, "rev-parse", "HEAD"))
+
+    def test_manifest_refuses_to_contradict_its_own_provenance(self) -> None:
+        # el cableado de main() pasa la rama real; si alguien pasara la sanitizada, truena aca
+        from chunking.config import load_config
+        from chunking.ingest_delta import collection_manifest
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _repo(Path(tmp))
+            recorded = {"git_sha": _git(repo, "rev-parse", "HEAD"), "dirty": False,
+                        "branch": "feature/x"}
+            with self.assertRaises(ValueError):
+                collection_manifest(str(repo), "feature-x", "demo_feature-x",
+                                    load_config(str(repo)), {"a.txt:0": "h"}, recorded)
+
+    def test_ingest_without_chunks_does_not_reach_chroma(self) -> None:
+        # sin JSONL no hay nada que ingerir: sale antes de crear la coleccion vacia
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = _repo(root)
+            out = subprocess.run(
+                [sys.executable, "-m", "chunking.ingest_delta", "--current-tree",
+                 "--repo", str(repo), "--chunks-dir", str(root / "chunks")],
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(out.returncode, 0)
+            self.assertIn("chunking-get", out.stdout + out.stderr)
+            self.assertNotIn("Conectando a ChromaDB", out.stdout + out.stderr)
+
+
     def test_ingest_refuses_a_branch_that_is_not_active(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
