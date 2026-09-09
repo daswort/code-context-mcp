@@ -8,11 +8,11 @@ Uso:
 import os
 import json
 import argparse
-import subprocess
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from chunking.config import load_config
+from chunking.git_state import resolve_branch
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -136,25 +136,15 @@ def save_to_jsonl(data: list[dict], output_file: str) -> None:
     print(f"\n✅ Exportado {len(data)} chunks a {output_file}")
 
 
-def switch_branch(branch_name: str, repo_dir: str) -> None:
-    """Cambia a la rama indicada en Git."""
-    try:
-        subprocess.run(["git", "checkout", branch_name], check=True, cwd=repo_dir)
-        print(f"🌀 Cambiado a la rama '{branch_name}'")
-        subprocess.run(["git", "pull", "origin", branch_name], check=True, cwd=repo_dir)
-        print(f"🌀 Bajando los últimos cambios de '{branch_name}'")
-    except subprocess.CalledProcessError:
-        print(f"[ERROR] No se pudo cambiar a la rama '{branch_name}'. Verifica que exista.")
-        exit(1)
-
-
 # ─── CLI Entry Point ─────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Segmenta el código fuente en chunks por rama."
     )
-    parser.add_argument("branch", help="Nombre de la rama Git a procesar.")
+    parser.add_argument("branch", nargs="?",
+                        help="Rama Git a procesar. Debe ser la rama activa: el indexador no cambia "
+                             "de rama. Omitila junto con --current-tree.")
     parser.add_argument(
         "--repo",
         default=".",
@@ -170,6 +160,11 @@ def main() -> None:
         action="store_true",
         help="Lista los archivos que se procesarían sin ejecutar nada.",
     )
+    parser.add_argument(
+        "--current-tree",
+        action="store_true",
+        help="Indexa la rama activa tal como está en disco, sin comparar con un nombre declarado.",
+    )
     args = parser.parse_args()
 
     repo_dir = os.path.abspath(args.repo)
@@ -177,14 +172,14 @@ def main() -> None:
 
     cfg = load_config(repo_dir)
 
+    branch = resolve_branch(repo_dir, args.branch, args.current_tree)
+
     if args.dry_run:
-        print(f"🔎 Dry-run para repo '{repo_dir}' (rama '{args.branch}')\n")
+        print(f"🔎 Dry-run para repo '{repo_dir}' (rama '{branch}')\n")
         dry_run(repo_dir, cfg)
         return
 
-    switch_branch(args.branch, repo_dir)
-
-    safe_branch = args.branch.replace("/", "-").replace("\\", "-")
+    safe_branch = branch.replace("/", "-").replace("\\", "-")
     branch_dir = os.path.join(output_dir, safe_branch)
     os.makedirs(branch_dir, exist_ok=True)
 
